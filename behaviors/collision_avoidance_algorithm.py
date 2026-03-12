@@ -35,8 +35,13 @@ class CollisionAvoidanceAlgorithm:
 
             # If the distance is below the collision threshold, adjust the position
             if distance < self.collision_threshold:
-                # Compute the direction vector away from the neighbor
-                direction = (current_position - neighbor_position) / distance
+                if distance < 1e-10:
+                    # Drones are at the exact same position — nudge in a random direction
+                    direction = np.random.randn(3)
+                    direction /= np.linalg.norm(direction) + 1e-10
+                else:
+                    # Compute the direction vector away from the neighbor
+                    direction = (current_position - neighbor_position) / distance
 
                 # Move the drone away from the neighbor to maintain the minimum distance
                 current_position += direction * (self.collision_threshold - distance)

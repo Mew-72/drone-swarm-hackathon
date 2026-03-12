@@ -17,6 +17,31 @@ class Drone:
         self.index = index
         self.target_position = np.array(position)  # Initialize with the current position
 
+        # Mapping mode attributes
+        self.sensor_data = []          # Recent scan readings
+        self.waypoints = []            # Ordered list of target positions for mapping
+        self.current_waypoint_idx = 0  # Progress through waypoints
+
+    def has_reached_waypoint(self, threshold=1.0):
+        """
+        Check if the drone has reached its current waypoint.
+
+        Parameters:
+        - threshold (float): Distance threshold for arrival.
+
+        Returns:
+        - bool: True if within threshold of current waypoint.
+        """
+        if self.current_waypoint_idx >= len(self.waypoints):
+            return True
+        target = self.waypoints[self.current_waypoint_idx]
+        return np.linalg.norm(self.position - target) < threshold
+
+    def advance_waypoint(self):
+        """Advance to the next waypoint in the mapping route."""
+        if self.current_waypoint_idx < len(self.waypoints):
+            self.current_waypoint_idx += 1
+
     def update_position(self, neighbor_positions, behavior_algorithms):
         """
         Updates the drone's position based on behavior algorithms and neighboring drones.
