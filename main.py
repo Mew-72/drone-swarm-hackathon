@@ -135,9 +135,27 @@ class DroneSwarmApp:
 
         ttk.Separator(self.mapping_controls_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=5)
 
+        # Speed control
+        ttk.Label(self.mapping_controls_frame, text="Speed:").pack(anchor=tk.W)
+        self.speed_var = tk.IntVar(value=1)
+        speed_frame = ttk.Frame(self.mapping_controls_frame)
+        speed_frame.pack(anchor=tk.W, fill=tk.X, padx=5)
+        self.speed_scale = ttk.Scale(speed_frame, from_=1, to=20,
+                                     orient=tk.HORIZONTAL, variable=self.speed_var)
+        self.speed_scale.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.speed_label = ttk.Label(speed_frame, text="1x", width=4)
+        self.speed_label.pack(side=tk.RIGHT)
+        self.speed_scale.configure(command=self._update_speed_label)
+
+        ttk.Separator(self.mapping_controls_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=5)
+
         # Generate new terrain button
         ttk.Button(self.mapping_controls_frame, text="Generate Terrain",
                    command=self.generate_new_terrain).pack(pady=3, fill=tk.X, padx=5)
+
+        # Skip to end button
+        ttk.Button(self.mapping_controls_frame, text="Skip to End",
+                   command=self.skip_to_end).pack(pady=3, fill=tk.X, padx=5)
 
         # Export buttons
         ttk.Button(self.mapping_controls_frame, text="Export Map (PNG)",
@@ -271,6 +289,45 @@ class DroneSwarmApp:
         # Reset coverage
         self.coverage_var.set("0.0%")
 
+    def _update_speed_label(self, val):
+        """Update the speed label text when slider moves."""
+        speed = int(float(val))
+        self.speed_label.config(text=f"{speed}x")
+
+    def skip_to_end(self):
+        """
+        Instantly complete the mapping — scans the entire area,
+        places all drones back at origin, and shows the final map.
+        """
+        if self.area_map is None:
+            return
+
+        # Stop any running animation
+        self.running = False
+        self.start_button.config(text="Animate")
+
+        # Scan every cell in the area
+        for r in range(self.area_map.grid_height):
+            for c in range(self.area_map.grid_width):
+                val = self.area_map.scan_cell(c, r)
+                if val is not None:
+                    self.area_map.update_cell(c, r, val)
+
+        # Return all drones to origin
+        if self.mapping_algorithm is not None:
+            origin = self.mapping_algorithm.get_origin()
+            for drone in self.mapping_drones:
+                drone.position = origin.copy()
+            # Mark all drones as done
+            for i in range(len(self.mapping_drones)):
+                self.mapping_algorithm.phases[i] = self.mapping_algorithm.PHASE_DONE
+
+        # Update visualization
+        positions = [drone.get_position() for drone in self.mapping_drones]
+        self.map_visualizer.update(positions)
+        self.mapping_canvas.draw()
+        self.coverage_var.set("100.0%")
+
     def export_map_png(self):
         """Export the current map as a PNG image."""
         if self.map_visualizer is not None:
@@ -365,29 +422,35 @@ class DroneSwarmApp:
         """
         Run the mapping simulation loop. Drones start from the origin,
         spread out, and sweep the area while avoiding collisions.
+        Speed multiplier runs multiple ticks per visual frame.
         """
         if self.mapping_algorithm is None or self.map_visualizer is None:
             return
 
         while self.running:
-            # Update each mapping drone
-            for drone in self.mapping_drones:
-                neighbor_positions = [
-                    other.communicate() for other in self.mapping_drones
-                    if other != drone
-                ]
+            # Run multiple simulation ticks per frame based on speed setting
+            ticks = max(1, self.speed_var.get())
+            for _ in range(ticks):
+                if not self.running:
+                    break
+                # Update each mapping drone
+                for drone in self.mapping_drones:
+                    neighbor_positions = [
+                        other.communicate() for other in self.mapping_drones
+                        if other != drone
+                    ]
 
-                # Apply mapping scan behavior (steers toward waypoints + scans)
-                new_pos = self.mapping_algorithm.apply(
-                    drone, neighbor_positions, drone.position.copy()
-                )
+                    # Apply mapping scan behavior (steers toward waypoints + scans)
+                    new_pos = self.mapping_algorithm.apply(
+                        drone, neighbor_positions, drone.position.copy()
+                    )
 
-                # Apply collision avoidance on top
-                new_pos = self.mapping_collision.apply(
-                    drone, neighbor_positions, new_pos
-                )
+                    # Apply collision avoidance on top
+                    new_pos = self.mapping_collision.apply(
+                        drone, neighbor_positions, new_pos
+                    )
 
-                drone.position = new_pos
+                    drone.position = new_pos
 
             # Get current drone positions for visualization
             positions = [drone.get_position() for drone in self.mapping_drones]

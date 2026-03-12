@@ -138,12 +138,12 @@ class TestMappingScanAlgorithm:
             assert i in alg.waypoints
             assert len(alg.waypoints[i]) > 0
 
-    def test_all_drones_start_in_disperse_phase(self):
-        """All drones should start in the DISPERSE phase."""
+    def test_all_drones_start_in_scanning_phase(self):
+        """All drones should start in the SCANNING phase."""
         am = AreaMap(width=50, height=50, resolution=1.0)
         alg = MappingScanAlgorithm(am, num_drones=3)
         for i in range(3):
-            assert alg.get_phase(i) == MappingScanAlgorithm.PHASE_DISPERSE
+            assert alg.get_phase(i) == MappingScanAlgorithm.PHASE_SCANNING
 
     def test_apply_moves_drone_toward_waypoint(self):
         """apply() should move the drone closer to its waypoint."""
@@ -167,6 +167,15 @@ class TestMappingScanAlgorithm:
         assert "coverage_percent" in progress
         assert "drones_active" in progress
         assert "drones_done" in progress
+
+    def test_last_waypoint_is_origin(self):
+        """The final waypoint for each drone should be the origin (return to base)."""
+        am = AreaMap(width=50, height=50, resolution=1.0)
+        origin = np.array([0.0, 0.0, 5.0])
+        alg = MappingScanAlgorithm(am, num_drones=3, origin=origin)
+        for i in range(3):
+            last_wp = alg.waypoints[i][-1]
+            assert np.allclose(last_wp, origin), f"Drone {i} last waypoint {last_wp} != origin {origin}"
 
 
 class TestDroneWaypoints:
